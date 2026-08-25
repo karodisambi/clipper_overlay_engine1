@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Clipper Overlay Engine V1.4</title>
+<style>
+:root{
+  --bg:#090b10;--panel:#141922;--panel2:#0f141c;--line:#2b3240;--text:#f8fafc;
+  --muted:#94a3b8;--accent:#7c5cff;--good:#16a34a;--warn:#b45309;--danger:#991b1b;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,Arial,sans-serif}
+header{position:sticky;top:0;z-index:10;padding:16px 18px;background:#090b10ee;border-bottom:1px solid var(--line);backdrop-filter:blur(10px)}
+h1{font-size:18px;margin:0}.sub{font-size:12px;color:var(--muted);margin-top:4px}
+main{display:grid;grid-template-columns:420px 1fr;gap:18px;max-width:1380px;margin:auto;padding:18px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px}
+label{display:block;font-size:12px;color:var(--muted);margin:10px 0 6px}
+input,select,textarea,button{width:100%;border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:var(--text);padding:10px}
+button{border:none;background:var(--accent);font-weight:800;cursor:pointer}
+button.secondary{background:#222938}.good{background:var(--good)}.warn{background:#92400e}.danger{background:var(--danger)}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:8px}.tools{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+hr{border:none;border-top:1px solid var(--line);margin:16px 0}
+.status{font-size:12px;color:var(--muted);margin-top:8px;white-space:pre-wrap}.ok{color:#86efac}.err{color:#fca5a5}.warning{color:#fde68a}
+.badge{display:inline-block;font-size:11px;padding:4px 8px;border-radius:999px;background:#222938;color:#cbd5e1;margin-top:7px}
+
+.stage-wrap{display:flex;justify-content:center;align-items:flex-start;min-height:70vh}
+.stage{position:relative;width:min(42vw,430px);aspect-ratio:9/16;background:#000;border-radius:18px;overflow:hidden;border:1px solid var(--line);box-shadow:0 16px 60px #0009}
+.bg-video,.main-video{position:absolute;inset:0;width:100%;height:100%}
+.bg-video{object-fit:cover;filter:blur(24px) brightness(.5);transform:scale(1.18);pointer-events:none;display:none}
+.main-video{z-index:2;object-fit:contain;background:#000;transform-origin:center center}
+.stage.blur .bg-video{display:block}.stage.blur .main-video{background:transparent}
+.overlay{position:absolute;z-index:5;left:6%;right:6%;top:78%;transform:translateY(-50%);text-align:center;font-weight:950;font-size:clamp(23px,3vw,42px);line-height:1.08;text-shadow:0 3px 18px #000,0 2px 3px #000;pointer-events:none}
+.overlay.top{top:17%}.overlay.center{top:50%}.overlay.bottom{top:78%}.overlay.punch{font-size:clamp(31px,4vw,58px)}
+.overlay.pop{animation:pop .17s ease-out}@keyframes pop{from{transform:translateY(-50%) scale(.7);opacity:0}to{transform:translateY(-50%) scale(1);opacity:1}}
+.emoji{position:absolute;z-index:7;font-size:46px;right:8%;top:24%;display:none;filter:drop-shadow(0 4px 8px #0008)}
+.hook{position:absolute;z-index:7;left:6%;right:6%;top:7%;text-align:center;font-size:25px;font-weight:950;text-shadow:0 3px 14px #000;display:none}
+.cta{position:absolute;z-index:8;left:8%;right:8%;bottom:11%;padding:12px;border-radius:14px;background:#000c;border:1px solid #ffffff33;text-align:center;font-weight:900;display:none}
+.progress{position:absolute;z-index:6;left:5%;right:5%;bottom:3.6%;height:5px;background:#ffffff30;border-radius:999px;overflow:hidden}
+.progress>div{height:100%;width:0%;background:white}
+.items{display:flex;flex-direction:column;gap:7px;max-height:300px;overflow:auto}
+.item{background:#10151d;border:1px solid var(--line);border-radius:10px;padding:8px;font-size:12px}.tiny{font-size:11px;color:var(--muted)}
+@media(max-width:850px){main{grid-template-columns:1fr;padding:12px}.stage{width:min(92vw,430px)}}
+</style>
+</head>
+<body>
+<header>
+  <h1>CLIPPER AI STUDIO — Overlay Engine V1.4</h1>
+  <div class="sub">Auto Zoom · Black-Bar Crop · Hook · Emoji · CTA · Smart Caption</div>
+</header>
+
+<main>
+<section class="panel">
+<label>1. Upload video</label>
+<input id="file" type="file" accept="video/*,audio/*">
+<div id="fileInfo" class="status">Belum ada file.</div>
+
+<hr>
+<label>2. AI Transcription</label>
+<button id="transcribe" class="good">✨ Auto Transcribe Presisi</button>
+<div id="aiStatus" class="status">Cloudflare Workers AI</div>
+<label>Transkrip</label>
+<textarea id="transcript" rows="4"></textarea>
+<label>VTT</label>
+<textarea id="vtt" rows="4" readonly></textarea>
+
+<hr>
+<label>3. Smart Caption</label>
+<div class="row">
+  <div><label>Kata / phrase</label><select id="words"><option>3</option><option selected>4</option><option>5</option></select></div>
+  <div><label>Max durasi</label><select id="maxDur"><option value="1.8">1.8s</option><option value="2.2" selected>2.2s</option><option value="2.8">2.8s</option></select></div>
+</div>
+<div class="row">
+  <div><label>Posisi</label><select id="capPos"><option value="bottom" selected>Bawah</option><option value="center">Tengah</option><option value="top">Atas</option></select></div>
+  <div><label>Highlight</label><input id="hiColor" type="color" value="#facc15"></div>
+</div>
+<div class="tools">
+<button id="smart" class="warn">⚡ Smart Caption</button>
+<button id="viral">🔥 Viral Overlay</button>
+</div>
+
+<hr>
+<label>4. Crop / Reframe 9:16</label>
+<div class="row">
+  <div><label>Background</label><select id="bgMode"><option value="black">Black</option><option value="blur" selected>Blur</option></select></div>
+  <div><label>Crop zoom</label><input id="cropZoom" type="range" min="1" max="2.2" step="0.02" value="1.45"></div>
+</div>
+<div class="row">
+  <div><label>Geser X</label><input id="panX" type="range" min="-35" max="35" step="1" value="0"></div>
+  <div><label>Geser Y</label><input id="panY" type="range" min="-35" max="35" step="1" value="0"></div>
+</div>
+<div class="badge">Naikkan Crop Zoom untuk membuang black bar yang sudah tertanam di footage.</div>
+
+<hr>
+<label>5. Auto Editing</label>
+<label style="display:flex;gap:8px;align-items:center"><input id="autoZoom" type="checkbox" checked style="width:auto"> Auto Zoom Cue</label>
+<label style="display:flex;gap:8px;align-items:center"><input id="autoEmoji" type="checkbox" checked style="width:auto"> Emoji Kontekstual</label>
+<label style="display:flex;gap:8px;align-items:center"><input id="showProgress" type="checkbox" checked style="width:auto"> Progress Bar</label>
+
+<label>Hook text</label>
+<input id="hookText" placeholder="Contoh: JANGAN ASAL POTONG VIDEO!">
+<div class="row">
+  <div><label>Hook durasi</label><input id="hookDur" type="number" step="0.1" value="2.2"></div>
+  <div><label>CTA durasi</label><input id="ctaDur" type="number" step="0.1" value="2.5"></div>
+</div>
+<label>CTA ending</label>
+<input id="ctaText" value="FOLLOW UNTUK TIPS BERIKUTNYA 🔥">
+<button id="buildAuto">🎬 Build Auto Editing</button>
+
+<hr>
+<label>Overlay Plan</label>
+<div id="items" class="items"></div>
+<div id="status" class="status">0 overlay.</div>
+<div style="height:8px"></div>
+<div class="tools">
+<button id="export" class="secondary">Export JSON</button>
+<button id="clear" class="danger">Hapus Semua</button>
+</div>
+</section>
+
+<section class="panel stage-wrap">
+<div id="stage" class="stage blur">
+  <video id="bgVideo" class="bg-video" muted playsinline></video>
+  <video id="video" class="main-video" controls playsinline></video>
+  <div id="hook" class="hook"></div>
+  <div id="overlay" class="overlay bottom" style="display:none"></div>
+  <div id="emoji" class="emoji"></div>
+  <div id="cta" class="cta"></div>
+  <div id="progress" class="progress"><div id="progressFill"></div></div>
+</div>
+</section>
+</main>
+
+<script>
+const ENDPOINT='https://clipper-overlay-api.disambikaro.workers.dev/transcribe';
+const $=id=>document.getElementById(id);
+const video=$('video'),bgVideo=$('bgVideo'),overlay=$('overlay'),items=$('items');
+let file=null,data={text:'',segments:[],vtt:''},overlays=[],editing={};
+
+$('file').onchange=e=>{
+ file=e.target.files?.[0]||null;if(!file)return;
+ const url=URL.createObjectURL(file);video.src=url;bgVideo.src=url;
+ $('fileInfo').textContent=`${file.name} · ${(file.size/1024/1024).toFixed(2)} MB`;
+};
+
+$('transcribe').onclick=async()=>{
+ if(!file)return alert('Pilih file.');
+ if(file.size>10*1024*1024)return alert('Untuk testing gunakan file <10 MB.');
+ $('aiStatus').textContent='Memproses...';
+ try{
+   const fd=new FormData();fd.append('file',file,file.name);
+   const r=await fetch(ENDPOINT,{method:'POST',body:fd});
+   const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||'Error');
+   data={text:d.text||'',segments:d.segments||[],vtt:d.vtt||''};
+   $('transcript').value=data.text;$('vtt').value=data.vtt;
+   $('aiStatus').textContent=`Berhasil · ${parseVTT(data.vtt).length} cue`;
+   $('aiStatus').className='status ok';
+ }catch(e){$('aiStatus').textContent='Gagal: '+e.message;$('aiStatus').className='status err'}
+};
+
+function sec(s){const p=s.trim().split(':').map(Number);return p.length===3?p[0]*3600+p[1]*60+p[2]:p.length===2?p[0]*60+p[1]:Number(s)||0}
+function parseVTT(v){
+ if(!v)return[];const l=v.replace(/\r/g,'').split('\n'),o=[];
+ for(let i=0;i<l.length;i++){if(!l[i].includes('-->'))continue;
+   const a=l[i].split('-->');let t=[];i++;
+   while(i<l.length&&l[i].trim()!==''){t.push(l[i].trim().replace(/<[^>]+>/g,''));i++}
+   const x=t.join(' ').trim();if(x)o.push({start:sec(a[0]),end:sec(a[1].trim().split(/\s+/)[0]),text:x})
+ }return o
+}
+function group(cues,n,maxDur){
+ const out=[];let cur=null;
+ for(const c of cues){
+   for(const w of c.text.split(/\s+/).filter(Boolean)){
+     if(!cur)cur={start:c.start,end:c.end,words:[w]};
+     else{
+       const pause=Math.max(0,c.start-cur.end),dur=Math.max(c.end,cur.end)-cur.start;
+       if(cur.words.length>=n||dur>maxDur||pause>.55||/[.!?,:;]$/.test(cur.words.at(-1))){
+         out.push({start:cur.start,end:cur.end,text:cur.words.join(' ')});cur={start:c.start,end:c.end,words:[w]};
+       }else{cur.words.push(w);cur.end=Math.max(cur.end,c.end)}
+     }
+     if(/[.!?]$/.test(w)&&cur){out.push({start:cur.start,end:cur.end,text:cur.words.join(' ')});cur=null}
+   }
+ }
+ if(cur)out.push({start:cur.start,end:cur.end,text:cur.words.join(' ')});
+ return out;
+}
+const stop=new Set('yang dan di ke dari untuk dengan ini itu ada jadi juga karena pada dalam atau kalau tapi sudah belum akan bisa sama saya aku kamu kita mereka dia sebuah lebih tidak nggak gak nya si sebagai saat agar oleh ketika'.split(' '));
+function kw(t){return t.split(/\s+/).map(w=>({w,c:w.toLowerCase().replace(/[^\p{L}\p{N}%]/gu,'')})).filter(x=>x.c&&!stop.has(x.c)).sort((a,b)=>(/\d/.test(b.c)?10:0)+b.c.length-((/\d/.test(a.c)?10:0)+a.c.length))[0]?.w||''}
+function esc(s){return s.replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
+function reg(s){return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}
+function hi(t,k,c){const s=esc(t);return k?s.replace(new RegExp(`(${reg(k)})`,'i'),`<span style="color:${c}">$1</span>`):s}
+
+function build(viral=false){
+ const cues=parseVTT(data.vtt);if(!cues.length)return alert('Transcribe dulu.');
+ const g=group(cues,+$('words').value,+$('maxDur').value),color=$('hiColor').value,pos=$('capPos').value;
+ overlays=overlays.filter(o=>!['caption','punch'].includes(o.source));
+ g.forEach((c,i)=>{
+   const k=kw(c.text);
+   overlays.push({id:crypto.randomUUID(),source:'caption',type:'caption',text:c.text,keyword:k,color,start:c.start,end:c.end,position:pos,priority:2});
+   if(viral&&k&&(i===0||i%3===0))overlays.push({id:crypto.randomUUID(),source:'punch',type:'punch',text:k.toUpperCase().replace(/[.,!?]/g,''),start:c.start,end:Math.min(c.end,c.start+.8),position:'center',color,priority:10});
+ });
+ render();
+}
+$('smart').onclick=()=>build(false);$('viral').onclick=()=>build(true);
+
+function applyCrop(){
+ $('stage').className='stage '+($('bgMode').value==='blur'?'blur':'');
+ const z=+$('cropZoom').value,x=+$('panX').value,y=+$('panY').value;
+ video.style.transform=`translate(${x}%,${y}%) scale(${z})`;
+}
+['bgMode','cropZoom','panX','panY'].forEach(id=>$(id).oninput=applyCrop);applyCrop();
+
+function emojiFor(text){
+ const t=text.toLowerCase();
+ if(/uang|harga|juta|ribu|bayar|profit|cuan/.test(t))return '💰';
+ if(/viral|view|posting|konten/.test(t))return '🔥';
+ if(/jangan|salah|bahaya|stop/.test(t))return '⚠️';
+ if(/tips|cara|strategi/.test(t))return '💡';
+ if(/waktu|detik|menit/.test(t))return '⏱️';
+ if(/naik|growth|tumbuh/.test(t))return '📈';
+ return '✨';
+}
+
+$('buildAuto').onclick=()=>{
+ build(true);
+ const phrases=overlays.filter(o=>o.source==='caption');
+ const duration=video.duration||Math.max(...phrases.map(x=>x.end),0);
+ editing={
+   hook:{text:$('hookText').value.trim()||phrases[0]?.text||'',start:0,end:+$('hookDur').value||2.2},
+   cta:{text:$('ctaText').value.trim(),start:Math.max(0,duration-(+$('ctaDur').value||2.5)),end:duration},
+   zoomCues:[],
+   emojiCues:[]
+ };
+ if($('autoZoom').checked)phrases.forEach((p,i)=>{if(i%3===0)editing.zoomCues.push({start:p.start,end:Math.min(p.end,p.start+.7),scale:1.08})});
+ if($('autoEmoji').checked)phrases.forEach((p,i)=>{if(i%4===1)editing.emojiCues.push({start:p.start,end:Math.min(p.end,p.start+1.0),emoji:emojiFor(p.text)})});
+ render();
+};
+
+video.addEventListener('play',()=>{bgVideo.currentTime=video.currentTime;bgVideo.play().catch(()=>{})});
+video.addEventListener('pause',()=>bgVideo.pause());
+video.addEventListener('seeking',()=>bgVideo.currentTime=video.currentTime);
+
+video.ontimeupdate=()=>{
+ const t=video.currentTime,d=video.duration||1;
+ if(Math.abs(bgVideo.currentTime-t)>.18)bgVideo.currentTime=t;
+ $('progressFill').style.width=`${Math.min(100,t/d*100)}%`;
+ $('progress').style.display=$('showProgress').checked?'block':'none';
+
+ const baseZ=+$('cropZoom').value,x=+$('panX').value,y=+$('panY').value;
+ const zc=editing.zoomCues?.find(z=>t>=z.start&&t<=z.end);
+ video.style.transform=`translate(${x}%,${y}%) scale(${baseZ*(zc?zc.scale:1)})`;
+
+ const act=overlays.filter(o=>t>=o.start&&t<=o.end).sort((a,b)=>(b.priority||0)-(a.priority||0))[0];
+ if(act){
+   overlay.className=`overlay ${act.position||'bottom'} pop ${act.type==='punch'?'punch':''}`;
+   overlay.innerHTML=act.type==='caption'?hi(act.text,act.keyword,act.color):esc(act.text);
+   overlay.style.color=act.type==='punch'?act.color:'#fff';overlay.style.display='block';
+ }else overlay.style.display='none';
+
+ const hc=editing.hook;
+ $('hook').style.display=hc&&t>=hc.start&&t<=hc.end?'block':'none';
+ $('hook').textContent=hc?.text||'';
+
+ const ec=editing.emojiCues?.find(e=>t>=e.start&&t<=e.end);
+ $('emoji').style.display=ec?'block':'none';$('emoji').textContent=ec?.emoji||'';
+
+ const cc=editing.cta;
+ $('cta').style.display=cc&&cc.text&&t>=cc.start&&t<=cc.end?'block':'none';
+ $('cta').textContent=cc?.text||'';
+};
+
+function render(){
+ items.innerHTML='';
+ overlays.sort((a,b)=>a.start-b.start||(b.priority||0)-(a.priority||0)).forEach((o,i)=>{
+   const d=document.createElement('div');d.className='item';
+   d.innerHTML=`<b>${i+1}. ${esc(o.text)}</b><div class="tiny">${o.start.toFixed(2)} → ${o.end.toFixed(2)} · ${o.source}</div>`;
+   items.appendChild(d);
+ });
+ $('status').textContent=`${overlays.length} overlay · ${editing.zoomCues?.length||0} zoom cue · ${editing.emojiCues?.length||0} emoji cue`;
+}
+$('clear').onclick=()=>{overlays=[];editing={};render()};
+
+$('export').onclick=()=>{
+ const payload={
+   version:'1.4',engine:'Clipper AI Studio',provider:'Cloudflare Workers AI',
+   crop:{zoom:+$('cropZoom').value,panX:+$('panX').value,panY:+$('panY').value,background:$('bgMode').value},
+   transcript:$('transcript').value,vtt:$('vtt').value,overlays,editing,
+   createdAt:new Date().toISOString()
+ };
+ const b=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),a=document.createElement('a');
+ a.href=URL.createObjectURL(b);a.download='overlay_plan_v1_4.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500);
+};
+render();
+</script>
+</body>
+</html>
