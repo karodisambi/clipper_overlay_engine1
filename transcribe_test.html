@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Clipper Transcription Test</title>
+<style>
+body{font-family:system-ui,Arial,sans-serif;background:#0b0d10;color:#fff;margin:0;padding:24px}
+.wrap{max-width:680px;margin:auto;background:#151922;border:1px solid #2a3140;border-radius:16px;padding:20px}
+h1{font-size:22px;margin-top:0}
+p{color:#aab2c0}
+input,button,textarea{width:100%;box-sizing:border-box;margin-top:10px;padding:12px;border-radius:10px;border:1px solid #2a3140;background:#0f131a;color:#fff}
+button{background:#7c5cff;border:none;font-weight:700;cursor:pointer}
+textarea{min-height:180px}
+.status{margin-top:12px;font-size:14px;color:#aab2c0}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>Clipper API — Test Transcription</h1>
+<p>Pilih file audio/video kecil lalu kirim ke Cloudflare Worker.</p>
+<input id="file" type="file" accept="audio/*,video/*">
+<button id="send">Tes Transkripsi</button>
+<div id="status" class="status">Belum ada request.</div>
+<textarea id="result" placeholder="Hasil transkrip akan muncul di sini..." readonly></textarea>
+</div>
+<script>
+const endpoint="https://clipper-overlay-api.disambikaro.workers.dev/transcribe";
+const file=document.getElementById("file");
+const send=document.getElementById("send");
+const status=document.getElementById("status");
+const result=document.getElementById("result");
+
+send.onclick=async()=>{
+  const f=file.files?.[0];
+  if(!f){alert("Pilih file dulu.");return;}
+  status.textContent="Mengirim file...";
+  result.value="";
+  send.disabled=true;
+  try{
+    const form=new FormData();
+    form.append("file",f,f.name);
+    const res=await fetch(endpoint,{method:"POST",body:form});
+    const data=await res.json();
+    if(!res.ok || !data.ok){
+      status.textContent="Gagal.";
+      result.value=JSON.stringify(data,null,2);
+      return;
+    }
+    status.textContent="Berhasil.";
+    result.value=data.text||"(transkrip kosong)";
+  }catch(err){
+    status.textContent="Error koneksi.";
+    result.value=String(err);
+  }finally{
+    send.disabled=false;
+  }
+};
+</script>
+</body>
+</html>
