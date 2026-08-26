@@ -1,0 +1,1148 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Clipper Overlay Engine V1.6.1</title>
+<style>
+:root{
+  --bg:#090b10;--panel:#141922;--panel2:#0f141c;--line:#2b3240;--text:#f8fafc;
+  --muted:#94a3b8;--accent:#7c5cff;--good:#16a34a;--warn:#b45309;--danger:#991b1b;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,Arial,sans-serif}
+header{position:sticky;top:0;z-index:10;padding:16px 18px;background:#090b10ee;border-bottom:1px solid var(--line);backdrop-filter:blur(10px)}
+h1{font-size:18px;margin:0}.sub{font-size:12px;color:var(--muted);margin-top:4px}
+main{display:grid;grid-template-columns:420px 1fr;gap:18px;max-width:1380px;margin:auto;padding:18px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px}
+label{display:block;font-size:12px;color:var(--muted);margin:10px 0 6px}
+input,select,textarea,button{width:100%;border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:var(--text);padding:10px}
+button{border:none;background:var(--accent);font-weight:800;cursor:pointer}
+button.secondary{background:#222938}.good{background:var(--good)}.warn{background:#92400e}.danger{background:var(--danger)}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:8px}.tools{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+hr{border:none;border-top:1px solid var(--line);margin:16px 0}
+.status{font-size:12px;color:var(--muted);margin-top:8px;white-space:pre-wrap}.ok{color:#86efac}.err{color:#fca5a5}.warning{color:#fde68a}
+.badge{display:inline-block;font-size:11px;padding:4px 8px;border-radius:999px;background:#222938;color:#cbd5e1;margin-top:7px}
+
+.stage-wrap{display:flex;justify-content:center;align-items:flex-start;min-height:70vh}
+.stage{position:relative;width:min(42vw,430px);aspect-ratio:9/16;background:#000;border-radius:18px;overflow:hidden;border:1px solid var(--line);box-shadow:0 16px 60px #0009}
+.bg-video,.main-video{position:absolute;inset:0;width:100%;height:100%}
+.bg-video{object-fit:cover;filter:blur(24px) brightness(.5);transform:scale(1.18);pointer-events:none;display:none}
+.main-video{z-index:2;object-fit:contain;background:#000;transform-origin:center center}
+.stage.blur .bg-video{display:block}.stage.blur .main-video{background:transparent}
+.overlay{position:absolute;z-index:5;left:6%;right:6%;top:78%;transform:translateY(-50%);text-align:center;font-weight:950;font-size:clamp(23px,3vw,42px);line-height:1.08;text-shadow:0 3px 18px #000,0 2px 3px #000;pointer-events:none}
+.overlay.top{top:17%}.overlay.center{top:50%}.overlay.bottom{top:78%}.overlay.punch{font-size:clamp(31px,4vw,58px)}
+.overlay.pop{animation:pop .17s ease-out}@keyframes pop{from{transform:translateY(-50%) scale(.7);opacity:0}to{transform:translateY(-50%) scale(1);opacity:1}}
+.emoji{position:absolute;z-index:7;font-size:46px;right:8%;top:24%;display:none;filter:drop-shadow(0 4px 8px #0008)}
+.hook{position:absolute;z-index:7;left:6%;right:6%;top:7%;text-align:center;font-size:25px;font-weight:950;text-shadow:0 3px 14px #000;display:none}
+.cta{position:absolute;z-index:8;left:8%;right:8%;bottom:11%;padding:12px;border-radius:14px;background:#000c;border:1px solid #ffffff33;text-align:center;font-weight:900;display:none}
+.progress{position:absolute;z-index:6;left:5%;right:5%;bottom:3.6%;height:5px;background:#ffffff30;border-radius:999px;overflow:hidden}
+.progress>div{height:100%;width:0%;background:white}
+.items{display:flex;flex-direction:column;gap:7px;max-height:300px;overflow:auto}
+.item{background:#10151d;border:1px solid var(--line);border-radius:10px;padding:8px;font-size:12px}.tiny{font-size:11px;color:var(--muted)}
+@media(max-width:850px){main{grid-template-columns:1fr;padding:12px}.stage{width:min(92vw,430px)}}
+
+.renderbox{margin-top:14px;padding:12px;border:1px solid var(--line);border-radius:12px;background:#0d1219}
+.renderlog{font-size:12px;color:var(--muted);white-space:pre-wrap;margin-top:8px;max-height:120px;overflow:auto}
+.renderbar{height:7px;background:#ffffff18;border-radius:999px;overflow:hidden;margin-top:8px}
+.renderbar>div{height:100%;width:0%;background:#7c5cff}
+
+
+.facebox{position:absolute;z-index:9;border:2px solid #22c55e;border-radius:10px;display:none;pointer-events:none;box-shadow:0 0 0 1px #0008}
+.trackgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.note{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.4}
+.overlay.bubble{background:rgba(0,0,0,.72);border:1px solid rgba(255,255,255,.18);padding:10px 14px;border-radius:16px}
+.overlay.premium{font-weight:850;letter-spacing:-.02em;text-shadow:0 2px 10px #000}
+.overlay.kinetic{text-transform:uppercase;letter-spacing:.01em}
+
+</style>
+</head>
+<body>
+<header>
+  <h1>CLIPPER AI STUDIO — Overlay Engine V1.6.1</h1>
+  <div class="sub">Stable Face Tracking · Single Caption Layer · Smart Reframe · Video Enhance · MP4</div>
+</header>
+
+<main>
+<section class="panel">
+<label>1. Upload video</label>
+<input id="file" type="file" accept="video/*,audio/*">
+<div id="fileInfo" class="status">Belum ada file.</div>
+<div class="note">⚠️ Gunakan video sumber asli. Jangan upload MP4 hasil render versi sebelumnya karena caption/CTA yang sudah terbakar di video akan terlihat dobel.</div>
+
+<hr>
+<label>2. AI Transcription</label>
+<button id="transcribe" class="good">✨ Auto Transcribe Presisi</button>
+<div id="aiStatus" class="status">Cloudflare Workers AI</div>
+<label>Transkrip</label>
+<textarea id="transcript" rows="4"></textarea>
+<label>VTT</label>
+<textarea id="vtt" rows="4" readonly></textarea>
+
+<hr>
+<label>3. Smart Caption</label>
+<div class="row">
+  <div><label>Kata / phrase</label><select id="words"><option>3</option><option selected>4</option><option>5</option></select></div>
+  <div><label>Max durasi</label><select id="maxDur"><option value="1.8">1.8s</option><option value="2.2" selected>2.2s</option><option value="2.8">2.8s</option></select></div>
+</div>
+<div class="row">
+  <div><label>Posisi</label><select id="capPos"><option value="bottom" selected>Bawah</option><option value="center">Tengah</option><option value="top">Atas</option></select></div>
+  <div><label>Highlight</label><input id="hiColor" type="color" value="#facc15"></div>
+</div>
+<div class="tools">
+<button id="smart" class="warn">⚡ Smart Caption</button>
+<button id="viral">🔥 Viral Overlay</button>
+</div>
+
+<hr>
+<label>4. Smart Reframe 9:16</label>
+
+<label style="display:flex;align-items:center;gap:8px">
+  <input id="faceTrackEnabled" type="checkbox" checked style="width:auto">
+  Auto Face Tracking
+</label>
+
+<button id="analyzeFace" class="good">🎯 Analisa & Track Wajah</button>
+<div id="faceStatus" class="status">Belum dianalisa.</div>
+
+<div class="row">
+  <div>
+    <label>Framing wajah</label>
+    <select id="faceFraming">
+      <option value="close">Close</option>
+      <option value="medium" selected>Medium</option>
+      <option value="wide">Wide</option>
+    </select>
+  </div>
+  <div>
+    <label>Background</label>
+    <select id="bgMode">
+      <option value="black">Black</option>
+      <option value="blur" selected>Blur</option>
+    </select>
+  </div>
+</div>
+
+<div class="row">
+  <div>
+    <label>Extra crop zoom</label>
+    <input id="cropZoom" type="range" min="1" max="1.7" step="0.02" value="1.06">
+  </div>
+  <div>
+    <label>Tracking smoothness</label>
+    <input id="trackSmooth" type="range" min="0.1" max="0.9" step="0.05" value="0.35">
+  </div>
+</div>
+
+<div class="row">
+  <div><label>Offset X</label><input id="panX" type="range" min="-25" max="25" step="1" value="0"></div>
+  <div><label>Offset Y</label><input id="panY" type="range" min="-25" max="25" step="1" value="-3"></div>
+</div>
+
+<div class="badge">Face Tracking akan menjaga wajah tetap di safe area 9:16 dan mengurangi crop yang salah.</div>
+
+<hr>
+<label>5. Video Enhance</label>
+<div class="row">
+  <div>
+    <label>Enhance preset</label>
+    <select id="enhancePreset">
+      <option value="off">Off</option>
+      <option value="natural" selected>Natural Clear</option>
+      <option value="clear">Extra Clear</option>
+      <option value="punchy">Punchy Social</option>
+    </select>
+  </div>
+  <div>
+    <label>Output</label>
+    <select id="outputResolution">
+      <option value="720" selected>720 × 1280</option>
+      <option value="1080">1080 × 1920</option>
+    </select>
+  </div>
+</div>
+
+<label>Caption style</label>
+<select id="captionStyle">
+  <option value="viral" selected>🔥 Viral Bold</option>
+  <option value="bubble">💬 Bubble</option>
+  <option value="premium">✨ Premium</option>
+  <option value="kinetic">⚡ Kinetic</option>
+</select>
+
+<label style="display:flex;align-items:center;gap:8px">
+  <input id="avoidFace" type="checkbox" checked style="width:auto">
+  Face-aware caption placement
+</label>
+
+<div class="note">
+  Enhance ini memperbaiki tampilan secara visual dengan brightness/contrast/saturation saat preview dan render.
+  Ini bukan AI deblur/upscale rekonstruktif.
+</div>
+
+<hr>
+<label>6. Auto Editing</label>
+<label style="display:flex;gap:8px;align-items:center"><input id="autoZoom" type="checkbox" checked style="width:auto"> Auto Zoom Cue</label>
+<label style="display:flex;gap:8px;align-items:center"><input id="autoEmoji" type="checkbox" checked style="width:auto"> Emoji Kontekstual</label>
+<label style="display:flex;gap:8px;align-items:center"><input id="showProgress" type="checkbox" checked style="width:auto"> Progress Bar</label>
+
+<label>Hook text</label>
+<input id="hookText" placeholder="Contoh: JANGAN ASAL POTONG VIDEO!">
+<div class="row">
+  <div><label>Hook durasi</label><input id="hookDur" type="number" step="0.1" value="2.2"></div>
+  <div><label>CTA durasi</label><input id="ctaDur" type="number" step="0.1" value="2.5"></div>
+</div>
+<label>CTA ending</label>
+<input id="ctaText" value="FOLLOW UNTUK TIPS BERIKUTNYA 🔥">
+<button id="buildAuto">🎬 Build Auto Editing</button>
+
+<hr>
+
+<hr>
+<label>7. Render Video</label>
+<div class="renderbox">
+  <div class="badge">Render dilakukan langsung di browser. Durasi render kira-kira sama dengan durasi video.</div>
+  <div style="height:10px"></div>
+  <button id="renderWebm" class="good">🎥 Render Video (WebM)</button>
+  <div style="height:8px"></div>
+  <button id="convertMp4" disabled>🎬 Convert WebM → MP4</button>
+  <div class="renderbar"><div id="renderBarFill"></div></div>
+  <div id="renderLog" class="renderlog">Belum ada hasil render.</div>
+</div>
+
+<label>Overlay Plan</label>
+<div id="items" class="items"></div>
+<div id="status" class="status">0 overlay.</div>
+<div style="height:8px"></div>
+<div class="tools">
+<button id="export" class="secondary">Export JSON</button>
+<button id="clear" class="danger">Hapus Semua</button>
+</div>
+</section>
+
+<section class="panel stage-wrap">
+<div id="stage" class="stage blur"><div id="faceIndicator" class="facebox"></div>
+  <video id="bgVideo" class="bg-video" muted playsinline></video>
+  <video id="video" class="main-video" controls playsinline></video>
+  <div id="hook" class="hook"></div>
+  <div id="overlay" class="overlay bottom" style="display:none"></div>
+  <div id="emoji" class="emoji"></div>
+  <div id="cta" class="cta"></div>
+  <div id="progress" class="progress"><div id="progressFill"></div></div>
+</div>
+</section>
+</main>
+
+<script>
+const ENDPOINT='https://clipper-overlay-api.disambikaro.workers.dev/transcribe';
+const $=id=>document.getElementById(id);
+const video=$('video'),bgVideo=$('bgVideo'),overlay=$('overlay'),items=$('items');
+let file=null,data={text:'',segments:[],vtt:''},overlays=[],editing={},faceTracks=[];
+
+$('file').onchange=e=>{
+ file=e.target.files?.[0]||null;if(!file)return; faceTracks=[]; $('faceStatus').textContent='Belum dianalisa.';
+ const url=URL.createObjectURL(file);video.src=url;bgVideo.src=url;
+ $('fileInfo').textContent=`${file.name} · ${(file.size/1024/1024).toFixed(2)} MB`;
+};
+
+$('transcribe').onclick=async()=>{
+ if(!file)return alert('Pilih file.');
+ if(file.size>10*1024*1024)return alert('Untuk testing gunakan file <10 MB.');
+ $('aiStatus').textContent='Memproses...';
+ try{
+   const fd=new FormData();fd.append('file',file,file.name);
+   const r=await fetch(ENDPOINT,{method:'POST',body:fd});
+   const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||'Error');
+   data={text:d.text||'',segments:d.segments||[],vtt:d.vtt||''};
+   $('transcript').value=data.text;$('vtt').value=data.vtt;
+   $('aiStatus').textContent=`Berhasil · ${parseVTT(data.vtt).length} cue`;
+   $('aiStatus').className='status ok';
+ }catch(e){$('aiStatus').textContent='Gagal: '+e.message;$('aiStatus').className='status err'}
+};
+
+function sec(s){const p=s.trim().split(':').map(Number);return p.length===3?p[0]*3600+p[1]*60+p[2]:p.length===2?p[0]*60+p[1]:Number(s)||0}
+function parseVTT(v){
+ if(!v)return[];const l=v.replace(/\r/g,'').split('\n'),o=[];
+ for(let i=0;i<l.length;i++){if(!l[i].includes('-->'))continue;
+   const a=l[i].split('-->');let t=[];i++;
+   while(i<l.length&&l[i].trim()!==''){t.push(l[i].trim().replace(/<[^>]+>/g,''));i++}
+   const x=t.join(' ').trim();if(x)o.push({start:sec(a[0]),end:sec(a[1].trim().split(/\s+/)[0]),text:x})
+ }return o
+}
+function group(cues,n,maxDur){
+ const out=[];let cur=null;
+ for(const c of cues){
+   for(const w of c.text.split(/\s+/).filter(Boolean)){
+     if(!cur)cur={start:c.start,end:c.end,words:[w]};
+     else{
+       const pause=Math.max(0,c.start-cur.end),dur=Math.max(c.end,cur.end)-cur.start;
+       if(cur.words.length>=n||dur>maxDur||pause>.55||/[.!?,:;]$/.test(cur.words.at(-1))){
+         out.push({start:cur.start,end:cur.end,text:cur.words.join(' ')});cur={start:c.start,end:c.end,words:[w]};
+       }else{cur.words.push(w);cur.end=Math.max(cur.end,c.end)}
+     }
+     if(/[.!?]$/.test(w)&&cur){out.push({start:cur.start,end:cur.end,text:cur.words.join(' ')});cur=null}
+   }
+ }
+ if(cur)out.push({start:cur.start,end:cur.end,text:cur.words.join(' ')});
+ return out;
+}
+const stop=new Set('yang dan di ke dari untuk dengan ini itu ada jadi juga karena pada dalam atau kalau tapi sudah belum akan bisa sama saya aku kamu kita mereka dia sebuah lebih tidak nggak gak nya si sebagai saat agar oleh ketika'.split(' '));
+function kw(t){return t.split(/\s+/).map(w=>({w,c:w.toLowerCase().replace(/[^\p{L}\p{N}%]/gu,'')})).filter(x=>x.c&&!stop.has(x.c)).sort((a,b)=>(/\d/.test(b.c)?10:0)+b.c.length-((/\d/.test(a.c)?10:0)+a.c.length))[0]?.w||''}
+function esc(s){return s.replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
+function reg(s){return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}
+function hi(t,k,c){const s=esc(t);return k?s.replace(new RegExp(`(${reg(k)})`,'i'),`<span style="color:${c}">$1</span>`):s}
+
+function build(viral=false){
+ const cues=parseVTT(data.vtt);if(!cues.length)return alert('Transcribe dulu.');
+ const g=group(cues,+$('words').value,+$('maxDur').value),color=$('hiColor').value,pos=$('capPos').value;
+
+ // V1.6.1: always keep exactly ONE generated subtitle layer.
+ const generatedSources=new Set([
+   'caption','punch','smart-caption','precise-caption','viral-punch',
+   'auto-caption','generated-caption','generated-punch'
+ ]);
+ overlays=overlays.filter(o=>!generatedSources.has(o.source));
+
+ const seen=new Set();
+ g.forEach((c,i)=>{
+   const cleanText=String(c.text||'').trim();
+   const signature=`${c.start.toFixed(2)}|${c.end.toFixed(2)}|${cleanText.toLowerCase()}`;
+   if(!cleanText || seen.has(signature))return;
+   seen.add(signature);
+
+   const k=kw(cleanText);
+   overlays.push({
+     id:crypto.randomUUID(),
+     source:'caption',
+     type:'caption',
+     text:cleanText,
+     keyword:k,
+     color,
+     start:c.start,
+     end:c.end,
+     position:pos,
+     priority:2
+   });
+
+   if(viral&&k&&(i===0||i%3===0)){
+     overlays.push({
+       id:crypto.randomUUID(),
+       source:'punch',
+       type:'punch',
+       text:k.toUpperCase().replace(/[.,!?]/g,''),
+       start:c.start,
+       end:Math.min(c.end,c.start+.8),
+       position:'center',
+       color,
+       priority:10
+     });
+   }
+ });
+ render();
+}
+$('smart').onclick=()=>build(false);$('viral').onclick=()=>build(true);
+
+function clamp(v,min,max){return Math.max(min,Math.min(max,v))}
+
+function nearestFace(t){
+  if(!faceTracks.length)return null;
+  let best=faceTracks[0],dist=Math.abs(t-best.t);
+  for(const f of faceTracks){
+    const d=Math.abs(t-f.t);
+    if(d<dist){best=f;dist=d}
+  }
+  return dist<1.0?best:null;
+}
+
+function enhanceFilter(){
+  const p=$('enhancePreset')?.value||'off';
+  if(p==='natural')return 'brightness(1.03) contrast(1.08) saturate(1.08)';
+  if(p==='clear')return 'brightness(1.04) contrast(1.14) saturate(1.10)';
+  if(p==='punchy')return 'brightness(1.03) contrast(1.18) saturate(1.22)';
+  return 'none';
+}
+
+function framingZoom(){
+  const f=$('faceFraming')?.value||'medium';
+  if(f==='close')return 1.18;
+  if(f==='wide')return 0.94;
+  return 1.04;
+}
+
+function applyCrop(){
+  $('stage').className='stage '+($('bgMode').value==='blur'?'blur':'');
+  const manualZ=+$('cropZoom').value;
+  const f=$('faceTrackEnabled')?.checked?nearestFace(video.currentTime||0):null;
+
+  video.style.filter=enhanceFilter();
+
+  if(f){
+    video.style.objectFit='cover';
+    const fx=clamp(f.x*100 + +$('panX').value,5,95);
+    const fy=clamp((f.y-.08)*100 + +$('panY').value,5,95);
+    video.style.objectPosition=`${fx}% ${fy}%`;
+    video.style.transformOrigin=`${fx}% ${fy}%`;
+    video.style.transform=`scale(${manualZ*framingZoom()})`;
+  }else{
+    video.style.objectFit='cover';
+    video.style.objectPosition=`${50 + +$('panX').value}% ${50 + +$('panY').value}%`;
+    video.style.transformOrigin='center center';
+    video.style.transform=`scale(${manualZ})`;
+  }
+}
+
+['bgMode','cropZoom','panX','panY','enhancePreset','faceFraming'].forEach(id=>{
+  if($(id)) $(id).oninput=applyCrop;
+});
+if($('faceTrackEnabled')) $('faceTrackEnabled').onchange=applyCrop;
+applyCrop();
+
+function emojiFor(text){
+ const t=text.toLowerCase();
+ if(/uang|harga|juta|ribu|bayar|profit|cuan/.test(t))return '💰';
+ if(/viral|view|posting|konten/.test(t))return '🔥';
+ if(/jangan|salah|bahaya|stop/.test(t))return '⚠️';
+ if(/tips|cara|strategi/.test(t))return '💡';
+ if(/waktu|detik|menit/.test(t))return '⏱️';
+ if(/naik|growth|tumbuh/.test(t))return '📈';
+ return '✨';
+}
+
+$('buildAuto').onclick=async()=>{
+ if($('faceTrackEnabled')?.checked && !faceTracks.length){
+   await analyzeFaceTracking();
+ }
+ build(true);
+ const phrases=overlays.filter(o=>o.source==='caption');
+ const duration=video.duration||Math.max(...phrases.map(x=>x.end),0);
+ editing={
+   hook:{text:$('hookText').value.trim()||phrases[0]?.text||'',start:0,end:+$('hookDur').value||2.2},
+   cta:{text:$('ctaText').value.trim(),start:Math.max(0,duration-(+$('ctaDur').value||2.5)),end:duration},
+   zoomCues:[],
+   emojiCues:[]
+ };
+ if($('autoZoom').checked)phrases.forEach((p,i)=>{if(i%3===0)editing.zoomCues.push({start:p.start,end:Math.min(p.end,p.start+.7),scale:1.06})});
+ if($('autoEmoji').checked)phrases.forEach((p,i)=>{if(i%4===1)editing.emojiCues.push({start:p.start,end:Math.min(p.end,p.start+1.0),emoji:emojiFor(p.text)})});
+ render();
+};
+
+
+async function waitForFaceAPI(){
+  for(let i=0;i<80;i++){
+    if(window.FaceTrackerAPI)return window.FaceTrackerAPI;
+    await new Promise(r=>setTimeout(r,100));
+  }
+  throw new Error('MediaPipe Face Detector gagal dimuat.');
+}
+
+function smoothTracks(tracks){
+  if(!tracks.length)return tracks;
+  const alpha=+$('trackSmooth').value||.35;
+  const out=[];
+  let px=tracks[0].x,py=tracks[0].y,pw=tracks[0].w,ph=tracks[0].h;
+  for(const f of tracks){
+    px=px*(1-alpha)+f.x*alpha;
+    py=py*(1-alpha)+f.y*alpha;
+    pw=pw*(1-alpha)+f.w*alpha;
+    ph=ph*(1-alpha)+f.h*alpha;
+    out.push({...f,x:px,y:py,w:pw,h:ph});
+  }
+  return out;
+}
+
+async function analyzeFaceTracking(){
+  if(!file)return alert('Upload video dulu.');
+  $('analyzeFace').disabled=true;
+  $('faceStatus').textContent='Memuat MediaPipe Face Detector...';
+  try{
+    const api=await waitForFaceAPI();
+    const raw=await api.analyzeFile(file,(done,total)=>{
+      $('faceStatus').textContent=`Tracking wajah... ${Math.round(done/total*100)}%`;
+    });
+    faceTracks=smoothTracks(raw);
+    if(!faceTracks.length){
+      $('faceStatus').textContent='Tidak ada wajah terdeteksi. Akan memakai crop tengah.';
+      $('faceStatus').className='status warning';
+    }else{
+      $('faceStatus').textContent=`Selesai · ${faceTracks.length} tracking point · mode stabil IMAGE sampling`;
+      $('faceStatus').className='status ok';
+    }
+    applyCrop();
+  }catch(e){
+    console.error(e);
+    $('faceStatus').textContent='Face tracking gagal: '+(e?.message||e);
+    $('faceStatus').className='status err';
+  }finally{
+    $('analyzeFace').disabled=false;
+  }
+}
+$('analyzeFace').onclick=analyzeFaceTracking;
+
+function smartCaptionY(t,defaultPos){
+  if(!$('avoidFace')?.checked)return defaultPos;
+  const f=nearestFace(t);
+  if(!f)return defaultPos;
+  // If face sits in lower half, move caption to top. Otherwise keep bottom.
+  if(f.y>.58)return 'top';
+  return 'bottom';
+}
+
+function updateFaceIndicator(t){
+  const box=$('faceIndicator');
+  if(!$('faceTrackEnabled')?.checked){box.style.display='none';return}
+  const f=nearestFace(t);
+  if(!f){box.style.display='none';return}
+  box.style.display='block';
+  box.style.left=`${clamp((f.x-f.w/2)*100,0,100)}%`;
+  box.style.top=`${clamp((f.y-f.h/2)*100,0,100)}%`;
+  box.style.width=`${clamp(f.w*100,2,100)}%`;
+  box.style.height=`${clamp(f.h*100,2,100)}%`;
+}
+
+video.addEventListener('play',()=>{bgVideo.currentTime=video.currentTime;bgVideo.play().catch(()=>{})});
+video.addEventListener('pause',()=>bgVideo.pause());
+video.addEventListener('seeking',()=>bgVideo.currentTime=video.currentTime);
+
+video.ontimeupdate=()=>{
+ const t=video.currentTime,d=video.duration||1; applyCrop(); updateFaceIndicator(t);
+ if(Math.abs(bgVideo.currentTime-t)>.18)bgVideo.currentTime=t;
+ $('progressFill').style.width=`${Math.min(100,t/d*100)}%`;
+ $('progress').style.display=$('showProgress').checked?'block':'none';
+
+ const baseZ=+$('cropZoom').value,x=+$('panX').value,y=+$('panY').value;
+ const zc=editing.zoomCues?.find(z=>t>=z.start&&t<=z.end);
+ video.style.transform=`translate(${x}%,${y}%) scale(${baseZ*(zc?zc.scale:1)})`;
+
+ const ctaActive=editing.cta && editing.cta.text && t>=editing.cta.start && t<=editing.cta.end;
+ const act=ctaActive?null:overlays.filter(o=>t>=o.start&&t<=o.end).sort((a,b)=>(b.priority||0)-(a.priority||0))[0];
+ if(act){
+   const smartPos=act.type==='caption'?smartCaptionY(t,act.position||'bottom'):(act.position||'bottom');
+   overlay.className=`overlay ${smartPos} pop ${act.type==='punch'?'punch':''} ${$('captionStyle')?.value||'viral'}`;
+   overlay.innerHTML=act.type==='caption'?hi(act.text,act.keyword,act.color):esc(act.text);
+   overlay.style.color=act.type==='punch'?act.color:'#fff';
+   overlay.style.display='block';
+ }else overlay.style.display='none';
+
+ const hc=editing.hook;
+ $('hook').style.display=hc&&t>=hc.start&&t<=hc.end?'block':'none';
+ $('hook').textContent=hc?.text||'';
+
+ const ec=editing.emojiCues?.find(e=>t>=e.start&&t<=e.end);
+ $('emoji').style.display=ec?'block':'none';$('emoji').textContent=ec?.emoji||'';
+
+ const cc=editing.cta;
+ $('cta').style.display=cc&&cc.text&&t>=cc.start&&t<=cc.end?'block':'none';
+ $('cta').textContent=cc?.text||'';
+};
+
+function render(){
+ items.innerHTML='';
+ overlays.sort((a,b)=>a.start-b.start||(b.priority||0)-(a.priority||0)).forEach((o,i)=>{
+   const d=document.createElement('div');d.className='item';
+   d.innerHTML=`<b>${i+1}. ${esc(o.text)}</b><div class="tiny">${o.start.toFixed(2)} → ${o.end.toFixed(2)} · ${o.source}</div>`;
+   items.appendChild(d);
+ });
+ $('status').textContent=`${overlays.length} overlay · ${editing.zoomCues?.length||0} zoom cue · ${editing.emojiCues?.length||0} emoji cue`;
+}
+$('clear').onclick=()=>{overlays=[];editing={};render()};
+
+$('export').onclick=()=>{
+ const payload={
+   version:'1.6.1',engine:'Clipper AI Studio',provider:'Cloudflare Workers AI',
+   crop:{zoom:+$('cropZoom').value,panX:+$('panX').value,panY:+$('panY').value,background:$('bgMode').value},
+   transcript:$('transcript').value,vtt:$('vtt').value,overlays,editing,
+   faceTracking:{enabled:$('faceTrackEnabled')?.checked||false,points:faceTracks},enhancePreset:$('enhancePreset')?.value||'off',captionStyle:$('captionStyle')?.value||'viral',outputResolution:+$('outputResolution')?.value||720,createdAt:new Date().toISOString()
+ };
+ const b=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),a=document.createElement('a');
+ a.href=URL.createObjectURL(b);a.download='overlay_plan_v1_4.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500);
+};
+render();
+
+// ============================
+// V1.5 BROWSER RENDER ENGINE
+// ============================
+let lastRenderedWebM = null;
+let lastRenderedName = "clipper_render_v1_6_1.webm";
+
+function renderLog(msg){
+  $('renderLog').textContent = msg;
+}
+function setRenderProgress(v){
+  $('renderBarFill').style.width = `${Math.max(0,Math.min(100,v))}%`;
+}
+
+function activeOverlayAt(t){
+  return overlays
+    .filter(o => t >= o.start && t <= o.end)
+    .sort((a,b)=>(b.priority||0)-(a.priority||0))[0] || null;
+}
+
+function wrapCanvasText(ctx,text,maxWidth){
+  const words = String(text||"").split(/\s+/).filter(Boolean);
+  const lines=[]; let line="";
+  for(const word of words){
+    const test=line ? `${line} ${word}` : word;
+    if(ctx.measureText(test).width > maxWidth && line){
+      lines.push(line); line=word;
+    }else line=test;
+  }
+  if(line) lines.push(line);
+  return lines;
+}
+
+function drawCenteredText(ctx,text,y,opts={}){
+  const size=opts.size||52;
+  const maxWidth=opts.maxWidth||640;
+  const lineHeight=opts.lineHeight||Math.round(size*1.08);
+  ctx.save();
+  ctx.font=`900 ${size}px Arial, sans-serif`;
+  ctx.textAlign="center";
+  ctx.textBaseline="middle";
+  ctx.lineJoin="round";
+  ctx.strokeStyle=opts.stroke||"rgba(0,0,0,.9)";
+  ctx.lineWidth=opts.strokeWidth||10;
+  ctx.fillStyle=opts.color||"#fff";
+  const lines=wrapCanvasText(ctx,text,maxWidth);
+  const startY=y-((lines.length-1)*lineHeight/2);
+  lines.forEach((line,i)=>{
+    const yy=startY+i*lineHeight;
+    ctx.strokeText(line,360,yy,maxWidth);
+    ctx.fillText(line,360,yy,maxWidth);
+  });
+  ctx.restore();
+}
+
+function drawCaptionWithHighlight(ctx,o,y){
+  const text=String(o.text||"");
+  const key=String(o.keyword||"");
+  const color=o.color||"#facc15";
+  const size=54,maxWidth=640,lineHeight=60;
+  ctx.save();
+  ctx.font=`900 ${size}px Arial, sans-serif`;
+  const lines=wrapCanvasText(ctx,text,maxWidth);
+  const startY=y-((lines.length-1)*lineHeight/2);
+  lines.forEach((line,idx)=>{
+    const yy=startY+idx*lineHeight;
+    ctx.textAlign="center";
+    ctx.textBaseline="middle";
+    ctx.lineJoin="round";
+    ctx.lineWidth=10;
+    ctx.strokeStyle="rgba(0,0,0,.9)";
+    ctx.strokeText(line,360,yy,maxWidth);
+
+    if(!key || !line.toLowerCase().includes(key.toLowerCase())){
+      ctx.fillStyle="#fff";
+      ctx.fillText(line,360,yy,maxWidth);
+      return;
+    }
+
+    // Simple per-word centered layout for highlight.
+    const parts=line.split(/\s+/);
+    const widths=parts.map((w,i)=>ctx.measureText(w+(i<parts.length-1?" ":"")).width);
+    const total=widths.reduce((a,b)=>a+b,0);
+    let x=360-total/2;
+    ctx.textAlign="left";
+    parts.forEach((w,i)=>{
+      ctx.fillStyle=w.replace(/[^\p{L}\p{N}%]/gu,"").toLowerCase()===key.replace(/[^\p{L}\p{N}%]/gu,"").toLowerCase()?color:"#fff";
+      ctx.fillText(w+(i<parts.length-1?" ":""),x,yy);
+      x+=widths[i];
+    });
+  });
+  ctx.restore();
+}
+
+
+function drawStyledCaption(ctx,o,y){
+  const style=$('captionStyle')?.value||'viral';
+  if(style==='bubble'){
+    const text=String(o.text||'');
+    ctx.save();
+    ctx.font='900 50px Arial, sans-serif';
+    const lines=wrapCanvasText(ctx,text,580);
+    const h=Math.max(86,lines.length*58+28);
+    ctx.fillStyle='rgba(0,0,0,.76)';
+    ctx.roundRect(55,y-h/2,610,h,22);
+    ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,.18)';
+    ctx.lineWidth=2;
+    ctx.stroke();
+    ctx.restore();
+    drawCaptionWithHighlight(ctx,o,y);
+    return;
+  }
+  if(style==='premium'){
+    const clone={...o,color:o.color||'#f8fafc'};
+    drawCaptionWithHighlight(ctx,clone,y);
+    return;
+  }
+  if(style==='kinetic'){
+    ctx.save();
+    ctx.translate(360,y);
+    const p=Math.max(0,Math.min(1,(video.currentTime-o.start)/.18));
+    const s=.82+.18*p;
+    ctx.scale(s,s);
+    ctx.translate(-360,-y);
+    drawCaptionWithHighlight(ctx,o,y);
+    ctx.restore();
+    return;
+  }
+  drawCaptionWithHighlight(ctx,o,y);
+}
+
+function drawFrame(ctx,rv,t){
+  const W=ctx.canvas.width,H=ctx.canvas.height;
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle="#000";ctx.fillRect(0,0,W,H);
+
+  const vw=rv.videoWidth||16,vh=rv.videoHeight||9;
+  const bg=$('bgMode').value;
+  const crop=+$('cropZoom').value;
+  const panX=+$('panX').value;
+  const panY=+$('panY').value;
+
+  if(bg==="blur"){
+    const cover=Math.max(W/vw,H/vh);
+    const bw=vw*cover,bh=vh*cover;
+    ctx.save();
+    ctx.filter="blur(24px) brightness(0.52)";
+    ctx.drawImage(rv,(W-bw)/2-35,(H-bh)/2-35,bw+70,bh+70);
+    ctx.restore();
+  }
+
+  const cover=Math.max(W/vw,H/vh);
+  let scale=cover*crop;
+  scale*=framingZoom();
+
+  const zc=editing.zoomCues?.find(z=>t>=z.start&&t<=z.end);
+  if(zc)scale*=zc.scale;
+
+  let dw=vw*scale, dh=vh*scale;
+  let dx=(W-dw)/2 + (panX/100)*dw;
+  let dy=(H-dh)/2 + (panY/100)*dh;
+
+  const face=$('faceTrackEnabled')?.checked?nearestFace(t):null;
+  if(face){
+    const targetX=W*.50;
+    const targetY=H*.37;
+    dx=targetX-face.x*dw+(panX/100)*dw;
+    dy=targetY-face.y*dh+(panY/100)*dh;
+  }
+
+  if(dw>=W)dx=clamp(dx,W-dw,0);
+  else dx=(W-dw)/2;
+  if(dh>=H)dy=clamp(dy,H-dh,0);
+  else dy=(H-dh)/2;
+
+  ctx.save();
+  ctx.filter=enhanceFilter();
+  ctx.drawImage(rv,dx,dy,dw,dh);
+  ctx.restore();
+
+  const hc=editing.hook;
+  if(hc && hc.text && t>=hc.start && t<=hc.end){
+    drawCenteredText(ctx,hc.text,105,{size:42,maxWidth:640});
+  }
+
+  const ctaActive=editing.cta && editing.cta.text && t>=editing.cta.start && t<=editing.cta.end;
+  const act=ctaActive?null:activeOverlayAt(t);
+  if(act){
+    const renderPos=act.type==="caption"?smartCaptionY(t,act.position||"bottom"):(act.position||"bottom");
+    const y=renderPos==="top"?220:renderPos==="center"?640:990;
+    if(act.type==="caption"){
+      drawStyledCaption(ctx,act,y);
+    }else{
+      drawCenteredText(ctx,act.text,y,{
+        size:act.type==="punch"?72:54,
+        color:act.color||"#fff",
+        maxWidth:640
+      });
+    }
+  }
+
+  const ec=editing.emojiCues?.find(e=>t>=e.start&&t<=e.end);
+  if(ec){
+    ctx.save();
+    ctx.font="72px Arial";
+    ctx.textAlign="center";
+    ctx.fillText(ec.emoji||"✨",620,270);
+    ctx.restore();
+  }
+
+  const cc=editing.cta;
+  if(cc && cc.text && t>=cc.start && t<=cc.end){
+    ctx.save();
+    ctx.fillStyle="rgba(0,0,0,.78)";
+    ctx.roundRect(70,1040,580,110,22);
+    ctx.fill();
+    drawCenteredText(ctx,cc.text,1095,{size:34,maxWidth:520,strokeWidth:7});
+    ctx.restore();
+  }
+
+  if($('showProgress').checked){
+    ctx.fillStyle="rgba(255,255,255,.22)";
+    ctx.fillRect(45,1220,630,6);
+    ctx.fillStyle="#fff";
+    ctx.fillRect(45,1220,630*Math.min(1,t/(rv.duration||1)),6);
+  }
+}
+
+async function renderToWebM(){
+  if(!file) return alert("Upload video dulu.");
+  const rv=$('renderSource');
+  const canvas=$('renderCanvas');
+  const outRes=+$('outputResolution').value||720;
+  canvas.width=outRes;
+  canvas.height=Math.round(outRes*16/9);
+  const ctx=canvas.getContext("2d");
+
+  renderLog("Menyiapkan renderer...");
+  setRenderProgress(0);
+
+  const objectURL=URL.createObjectURL(file);
+  rv.src=objectURL;
+  rv.crossOrigin="anonymous";
+  await new Promise((resolve,reject)=>{
+    rv.onloadedmetadata=resolve;
+    rv.onerror=reject;
+  });
+
+  // Audio routing from the hidden render video into the captured stream.
+  const AudioCtx=window.AudioContext||window.webkitAudioContext;
+  let audioCtx=null,dest=null;
+  try{
+    audioCtx=new AudioCtx();
+    await audioCtx.resume();
+    const source=audioCtx.createMediaElementSource(rv);
+    dest=audioCtx.createMediaStreamDestination();
+    source.connect(dest);
+  }catch(e){
+    console.warn("Audio capture unavailable:",e);
+  }
+
+  const stream=canvas.captureStream(30);
+  if(dest){
+    dest.stream.getAudioTracks().forEach(track=>stream.addTrack(track));
+  }
+
+  let mime="video/webm;codecs=vp9,opus";
+  if(!MediaRecorder.isTypeSupported(mime)) mime="video/webm;codecs=vp8,opus";
+  if(!MediaRecorder.isTypeSupported(mime)) mime="video/webm";
+
+  const chunks=[];
+  const recorder=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:5_500_000});
+  recorder.ondataavailable=e=>{if(e.data?.size)chunks.push(e.data)};
+
+  const finished=new Promise((resolve,reject)=>{
+    recorder.onerror=e=>reject(e.error||e);
+    recorder.onstop=()=>resolve();
+  });
+
+  recorder.start(1000);
+  rv.currentTime=0;
+  rv.muted=false;
+
+  let stopped=false;
+  const frame=()=>{
+    if(stopped) return;
+    drawFrame(ctx,rv,rv.currentTime||0);
+    setRenderProgress((rv.currentTime/(rv.duration||1))*100);
+    renderLog(`Rendering... ${rv.currentTime.toFixed(1)} / ${rv.duration.toFixed(1)} detik`);
+    requestAnimationFrame(frame);
+  };
+  frame();
+
+  await rv.play();
+  await new Promise(resolve=>{
+    rv.onended=resolve;
+  });
+
+  drawFrame(ctx,rv,rv.duration||0);
+  stopped=true;
+  recorder.stop();
+  await finished;
+
+  if(audioCtx) await audioCtx.close().catch(()=>{});
+  URL.revokeObjectURL(objectURL);
+
+  lastRenderedWebM=new Blob(chunks,{type:"video/webm"});
+  $('convertMp4').disabled=false;
+  setRenderProgress(100);
+  renderLog(`Render WebM selesai · ${(lastRenderedWebM.size/1024/1024).toFixed(2)} MB`);
+
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(lastRenderedWebM);
+  a.download=lastRenderedName;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1500);
+}
+
+async function convertLatestToMP4(){
+  if(!lastRenderedWebM) return alert("Render WebM dulu.");
+
+  $('convertMp4').disabled=true;
+  try{
+    renderLog("Memuat FFmpeg.wasm (~31 MB)...");
+    setRenderProgress(3);
+
+    const [{FFmpeg},{toBlobURL,fetchFile}] = await Promise.all([
+      import("https://esm.sh/@ffmpeg/ffmpeg@0.12.15?bundle"),
+      import("https://esm.sh/@ffmpeg/util@0.12.2?bundle")
+    ]);
+
+    const ffmpeg=new FFmpeg();
+    ffmpeg.on("log",({message})=>{
+      renderLog("FFmpeg: "+message);
+    });
+    ffmpeg.on("progress",({progress})=>{
+      if(Number.isFinite(progress)) setRenderProgress(5+progress*95);
+    });
+
+    const baseURL="https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd";
+
+    // IMPORTANT:
+    // @ffmpeg/ffmpeg imported from esm.sh normally tries to spawn
+    // https://esm.sh/.../worker.js directly. Browsers reject a cross-origin Worker
+    // when the page is hosted on GitHub Pages.
+    //
+    // Convert the class worker into a blob: URL first. A blob created by this
+    // page inherits the GitHub Pages origin and avoids the Worker origin error.
+    const classWorkerURL = await toBlobURL(
+      "https://esm.sh/@ffmpeg/ffmpeg@0.12.15/es2022/worker.js",
+      "text/javascript"
+    );
+
+    await ffmpeg.load({
+      classWorkerURL,
+      coreURL:await toBlobURL(`${baseURL}/ffmpeg-core.js`,"text/javascript"),
+      wasmURL:await toBlobURL(`${baseURL}/ffmpeg-core.wasm`,"application/wasm")
+    });
+
+    renderLog("FFmpeg siap. Mengubah WebM → MP4...");
+    await ffmpeg.writeFile("input.webm",await fetchFile(lastRenderedWebM));
+
+    // Browser-friendly MP4. If libx264 is unavailable, generic mp4 conversion is retried.
+    let code=await ffmpeg.exec([
+      "-i","input.webm",
+      "-c:v","libx264","-preset","ultrafast","-crf","23",
+      "-c:a","aac","-b:a","128k",
+      "-movflags","+faststart",
+      "output.mp4"
+    ]);
+
+    if(code!==0){
+      renderLog("Mencoba mode kompatibilitas MP4...");
+      await ffmpeg.exec(["-i","input.webm","output.mp4"]);
+    }
+
+    const data=await ffmpeg.readFile("output.mp4");
+    const mp4=new Blob([data.buffer],{type:"video/mp4"});
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(mp4);
+    a.download="clipper_render_v1_6_1.mp4";
+    a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+
+    setRenderProgress(100);
+    renderLog(`MP4 selesai · ${(mp4.size/1024/1024).toFixed(2)} MB`);
+    try{
+      await ffmpeg.deleteFile("input.webm");
+      await ffmpeg.deleteFile("output.mp4");
+      ffmpeg.terminate();
+    }catch{}
+  }catch(err){
+    console.error(err);
+    const detail=String(err?.message||err);
+    let help="WebM hasil render tetap valid dan sudah tersimpan.";
+    if(detail.includes("Worker") || detail.includes("origin")){
+      help+="\nWorker FFmpeg masih diblokir browser. Coba Chrome desktop atau refresh setelah GitHub Pages selesai deploy.";
+    }
+    renderLog(
+      "MP4 conversion gagal.\n"+
+      help+"\n"+
+      "Detail: "+detail
+    );
+  }finally{
+    $('convertMp4').disabled=false;
+  }
+}
+
+$('renderWebm').onclick=async()=>{
+  $('renderWebm').disabled=true;
+  try{ await renderToWebM(); }
+  catch(e){
+    console.error(e);
+    renderLog("Render gagal: "+(e?.message||e));
+  }finally{
+    $('renderWebm').disabled=false;
+  }
+};
+
+$('convertMp4').onclick=convertLatestToMP4;
+
+</script>
+
+<video id="renderSource" playsinline style="display:none"></video>
+<canvas id="renderCanvas" width="720" height="1280" style="display:none"></canvas>
+
+
+<script type="module">
+import {
+  FaceDetector,
+  FilesetResolver
+} from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/+esm";
+
+let detector=null;
+
+async function init(){
+  if(detector)return detector;
+
+  const vision=await FilesetResolver.forVisionTasks(
+    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm"
+  );
+
+  const options={
+    baseOptions:{
+      modelAssetPath:
+        "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite"
+    },
+
+    // V1.6.1:
+    // We sample a normal video by seeking to individual frames.
+    // Each sampled frame is treated as an IMAGE, avoiding VIDEO-mode
+    // monotonically-increasing timestamp errors on mobile browsers.
+    runningMode:"IMAGE",
+    minDetectionConfidence:.42,
+    minSuppressionThreshold:.30
+  };
+
+  try{
+    detector=await FaceDetector.createFromOptions(vision,{
+      ...options,
+      baseOptions:{...options.baseOptions,delegate:"GPU"}
+    });
+  }catch{
+    detector=await FaceDetector.createFromOptions(vision,options);
+  }
+
+  return detector;
+}
+
+function waitMetadata(video){
+  return new Promise((resolve,reject)=>{
+    if(video.readyState>=1 && Number.isFinite(video.duration))return resolve();
+    video.addEventListener("loadedmetadata",resolve,{once:true});
+    video.addEventListener("error",()=>reject(new Error("Gagal membaca metadata video")),{once:true});
+  });
+}
+
+function seek(video,time){
+  return new Promise((resolve,reject)=>{
+    const target=Math.max(0,Math.min(time,Math.max(0,(video.duration||time)-0.002)));
+
+    if(Math.abs(video.currentTime-target)<0.002){
+      requestAnimationFrame(()=>resolve());
+      return;
+    }
+
+    const done=()=>{
+      cleanup();
+      requestAnimationFrame(()=>resolve());
+    };
+    const fail=()=>{
+      cleanup();
+      reject(new Error("Gagal seek video"));
+    };
+    const cleanup=()=>{
+      video.removeEventListener("seeked",done);
+      video.removeEventListener("error",fail);
+    };
+
+    video.addEventListener("seeked",done,{once:true});
+    video.addEventListener("error",fail,{once:true});
+    video.currentTime=target;
+  });
+}
+
+function largestDetection(detections){
+  if(!detections?.length)return null;
+  return detections
+    .map(d=>({
+      d,
+      b:d.boundingBox,
+      area:(d.boundingBox?.width||0)*(d.boundingBox?.height||0)
+    }))
+    .filter(x=>x.b)
+    .sort((a,b)=>b.area-a.area)[0]||null;
+}
+
+window.FaceTrackerAPI={
+  async analyzeFile(file,onProgress){
+    const fd=await init();
+
+    const v=document.createElement("video");
+    v.muted=true;
+    v.playsInline=true;
+    v.preload="auto";
+
+    const url=URL.createObjectURL(file);
+    v.src=url;
+
+    try{
+      await waitMetadata(v);
+
+      const duration=v.duration||0;
+
+      // Mobile-friendly sampling.
+      const interval =
+        duration>60 ? 0.75 :
+        duration>30 ? 0.55 :
+        duration>15 ? 0.38 : 0.28;
+
+      const total=Math.max(1,Math.ceil(duration/interval));
+      const tracks=[];
+      let lastValid=null;
+      let index=0;
+
+      for(let t=0;t<duration;t+=interval){
+        await seek(v,t);
+
+        // IMAGE mode => no timestamp argument, no monotonic timestamp error.
+        const result=fd.detect(v);
+        const best=largestDetection(result?.detections);
+
+        if(best?.b){
+          const b=best.b;
+          const point={
+            t,
+            x:(b.originX+b.width/2)/v.videoWidth,
+            y:(b.originY+b.height/2)/v.videoHeight,
+            w:b.width/v.videoWidth,
+            h:b.height/v.videoHeight
+          };
+
+          tracks.push(point);
+          lastValid=point;
+        }else if(lastValid){
+          // Carry-forward short gaps to prevent framing jumps.
+          tracks.push({...lastValid,t});
+        }
+
+        index++;
+        onProgress?.(Math.min(index,total),total);
+
+        // Yield to mobile UI thread.
+        await new Promise(r=>setTimeout(r,0));
+      }
+
+      return tracks;
+    }finally{
+      URL.revokeObjectURL(url);
+      v.removeAttribute("src");
+      v.load();
+    }
+  }
+};
+</script>
+
+</body>
+</html>
